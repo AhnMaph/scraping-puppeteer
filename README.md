@@ -1,7 +1,7 @@
 # 📖 Web Novel Scraper
 
 ## 📝 Giới Thiệu
-Một công cụ **web scraping** giúp hỗ trợ tự động thu thập dữ liệu truyện tranh, tiểu thuyết từ các trang web khác nhau. Công cụ có thể lấy thông tin như:
+Một công cụ **web scraping** giúp hỗ trợ tự động thu thập dữ liệu truyện tranh, tiểu thuyết từ các trang web khác nhau sử dụng puppeteer. Công cụ có thể lấy thông tin như:
 - 📌 **Danh sách truyện**: Tên, tác giả, thể loại, trạng thái, mô tả.
 - 📖 **Chương truyện**: Nội dung từng chương của tiểu thuyết hoặc hình ảnh của manga.
 - 🏷 **Thể loại & Tag**: Phân loại truyện để dễ dàng sắp xếp.
