@@ -1,0 +1,14 @@
+// filepath: /home/ahn/scraping-puppeteer/tsconfig.json
+{
+    "compilerOptions": {
+      "lib": ["ESNext", "DOM"],
+      "module": "NodeNext",
+      "target": "ESNext",
+      "moduleResolution": "NodeNext",
+      "outDir": "./dist",
+      "rootDir": "./",
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true
+    },
+    "include": ["./"]
+  }
