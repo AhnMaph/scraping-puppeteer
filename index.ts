@@ -10,7 +10,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // const url = 'https://truyenwikidich.net/tim-kiem?qs=1&gender=5794f03dd7ced228f4419198&tc=&tf=0&m=3&y=2025&q=';
-const url = 'https://truyenwikidich.net/tim-kiem?qs=1&gender=5794f03dd7ced228f4419198&m=3&so=4&y=2025&vo=1#'
+// const url = 'https://truyenwikidich.net/tim-kiem?qs=1&gender=5794f03dd7ced228f4419198&m=3&so=4&y=2025&vo=1#'
+const url = 'https://truyenwikidich.net/tim-kiem?qs=1&status=5794f03dd7ced228f4419191&gender=5794f03dd7ced228f4419197&tc=&tf=0&m=3&y=2025&q=';
 const BaseURL = 'https://truyenwikidich.net'
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const saveData = async(data: any[], outputFile: string) => {
@@ -40,7 +41,7 @@ const nextPage = async (page: Page, typeEffect:string, currentPage: number) => {
 const getTruyenList = async () => {
     console.log("Bắt đầu Puppeteer...");
 
-    const browser: Browser = await puppeteer.launch({ headless: true });
+    const browser: Browser = await puppeteer.launch({ headless: false });
     const page = await browser.newPage();
     await page.goto(url);
     
@@ -67,10 +68,10 @@ const getTruyenList = async () => {
 
             return data;
         });
-        saveData(truyenData,"truyen-data.json");
+        saveData(truyenData,"truyen-data-1.json");
         // await new Promise(resolve => setTimeout(resolve, 1000));
 
-        const typeEffect ='li.waves-effect a';
+        const typeEffect ='li.waves-effect a'; // nút chuyển trang
         const newPage = await nextPage(page,typeEffect,currentPage);
         if(newPage===null) break;
         currentPage = newPage;
@@ -326,4 +327,5 @@ const downloadImage = async (url: string, filename: string) => {
 // truyen_list()
 // saveCover('truyen-data.json');
 // saveChapters('truyen-data.json');
-saveEveryChapterOfAll('truyen-data.json');
+// saveEveryChapterOfAll('truyen-data.json');
+getTruyenList();
