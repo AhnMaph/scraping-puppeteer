@@ -37,7 +37,7 @@ Một công cụ **web scraping** giúp hỗ trợ tự động thu thập dữ 
 
 ---
 
-### 📖 Web Novel Scraper (English)
+# 📖 Web Novel Scraper (English)
 
 ## 📝 Introduction
 A **web scraping** tool that automates the collection of manga and novel data from various websites using Puppeteer. The tool can extract information such as:
