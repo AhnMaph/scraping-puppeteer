@@ -5,3 +5,4 @@
 # # /truyen-data
 # /truyen-data.json
 node_modules
+*.json
