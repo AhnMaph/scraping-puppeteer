@@ -1,112 +1,121 @@
 import puppeteer, { Page, Browser } from 'puppeteer';
+import randomUseragent from 'random-useragent';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import puppeteerExtraImport from 'puppeteer-extra';
 import { fileURLToPath } from 'url';
 import * as fs from 'node:fs/promises';
-import axios from 'axios';
 import path from 'path';
-
+const puppeteerExtra = puppeteerExtraImport as any;
+puppeteerExtra.use(StealthPlugin());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BASE_URL = 'https://truyenwikidich.net';
-const SEARCH_URL = `${BASE_URL}/tim-kiem?qs=1&gender=5794f03dd7ced228f4419198&tc=4&tf=0&m=4&y=2025&q=`;
-const OUTPUT_DIR = path.join(__dirname, 'truyen-save');
+const SEARCH_URL = `${BASE_URL}/tim-kiem?qs=1&gender=5794f03dd7ced228f4419195&tc=4&tf=0&m=4&y=2025&q=`;
+const OUTPUT_DIR = path.join(__dirname, 'truyen');
 const MAX_CONCURRENT_TABS = 5;
 
-// Utility functions
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> =>
+    new Promise(resolve => setTimeout(resolve, ms + Math.random() * 800));
+
 const saveData = async (data: any, filePath: string): Promise<void> => {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 };
 
-// Pagination handler
-const getNextPage = async (page: Page, selector: string, currentPage: number): Promise<number | null> => {
+const getNextPage = async (page, selector: string, currentPage: number): Promise<number | null> => {
     const buttons = await page.$$(selector);
     for (const button of buttons) {
-        const pageNum = await page.evaluate(el => parseInt((el as HTMLElement).innerText.trim(), 10), button);
+        const pageNum = await page.evaluate(el => parseInt(el.textContent?.trim() || 'NaN', 10), button);
         if (!isNaN(pageNum) && pageNum > currentPage) {
-            console.log(`Chuyển sang trang ${pageNum}...`);
+            console.log(`➡️ Chuyển sang trang ${pageNum}...`);
             await button.click();
-            await sleep(1000);
             return pageNum;
         }
     }
-    console.log("Không còn trang tiếp theo.");
+    console.log("⛔ Không còn trang tiếp theo.");
     return null;
 };
 
-// Main scraping functions
-const scrapeTruyenList = async (): Promise<void> => {
-    console.log("Bắt đầu scrape danh sách truyện...");
-    const browser = await puppeteer.launch({ headless: true });
-    
+const scrapeTruyen = async (): Promise<void> => {
+    console.log("🚀 Bắt đầu scrape danh sách truyện...");
+    const browser = await puppeteerExtra.launch({
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled'
+        ]
+    });
+
     try {
         let currentPage = 1;
         let page = await browser.newPage();
-        await page.goto(SEARCH_URL);
+        const ua = randomUseragent.getRandom();
+        await page.setUserAgent(ua); 
+        await page.goto(SEARCH_URL, { timeout: 60000, waitUntil: 'domcontentloaded' });
 
         while (true) {
             console.log(`📄 Đang scrape trang ${currentPage}...`);
-            await page.waitForSelector('.book-item', { visible: true });
+            await page.waitForSelector('.book-item', { timeout: 60000 });
+            await sleep(1500);
 
             const truyenData = await page.evaluate(() => {
                 return Array.from(document.querySelectorAll('.book-item')).map((truyen: any) => ({
-                    cover: truyen.querySelector('.cover-col a.cover-wrapper img')?.src || "",
+                    cover: truyen.querySelector('.cover-col a.cover-wrapper img')?.getAttribute('src') || "",
                     source: truyen.querySelector('.tooltipped')?.getAttribute('href') || ""
                 }));
             });
 
-            const filepath = path.join(OUTPUT_DIR, `${currentPage}.json`);
+            console.log(`✅ Tìm thấy ${truyenData.length} truyện trên trang này.`);
             await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
             for (const [index, truyen] of truyenData.entries()) {
                 const truyenUrl = `${BASE_URL}${truyen.source}`;
-                const filepath = path.join(OUTPUT_DIR, `page${currentPage}_truyen${index + 1}.json`);
-                
-                console.log(`📖 Đang xử lý truyện ${index + 1}/${truyenData.length} trên trang ${currentPage}`);
-                
-                const detail = await getTruyenDetail(truyenUrl);
+                const filepath = path.join(OUTPUT_DIR, `truyen_${(currentPage - 1) * 26 + index + 1}.json`);
+                console.log(`🔗 URL truyện: ${truyenUrl}`);
+
+                const detail = await getTruyenDescription(browser, truyenUrl);
                 if (detail) {
                     detail.covers = truyen.cover;
-                    detail.chapters = await saveEveryChapter(detail.chapters, []);
+                    detail.chapters = await getChaptersFromList(browser, detail.chapters, []);
                     await saveData(detail, filepath);
                 }
+                await sleep(1000);
             }
 
             const nextPageNum = await getNextPage(page, 'li.waves-effect a', currentPage);
-            if (!nextPageNum || nextPageNum === 2) break;
-            
+            if (!nextPageNum) break;
+
             currentPage = nextPageNum;
             await page.close();
             page = await browser.newPage();
             await page.goto(SEARCH_URL);
         }
-    } catch (error) {
-        console.error(`❌ Lỗi khi scrape danh sách: ${error.message}`);
+    } catch (error: any) {
+        console.error(`❌ Lỗi scrape danh sách: ${error.message}`);
     } finally {
         await browser.close();
-        console.log("✔ Hoàn tất scrape danh sách truyện");
+        console.log("🏁 Hoàn tất scrape danh sách truyện.");
     }
 };
 
-const getTruyenDetail = async (url: string): Promise<any> => {
-    const browser = await puppeteer.launch({ headless: true });
+const getTruyenDescription = async (browser, url: string): Promise<any> => {
     const page = await browser.newPage();
-
+    const ua = randomUseragent.getRandom();
+    await page.setUserAgent(ua); 
     try {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
-        
+
         const isLocked = await page.evaluate(() => !!document.querySelector('#formVerifyCode, #modalManagerPermission'));
         if (isLocked) {
-            console.warn(`⚠ Truyện tại ${url} bị khóa`);
+            console.warn(`🔒 Truyện tại ${url} bị khóa`);
             return null;
         }
 
-        await Promise.all([
-            page.waitForSelector('.cover-info', { timeout: 10000 }),
-            page.waitForSelector('.book-desc-detail', { timeout: 10000 })
-        ]);
+        await page.waitForSelector('.cover-info');
+        await page.waitForSelector('.book-desc-detail');
 
-        const storyInfo = await page.evaluate(() => ({
+        return await page.evaluate(() => ({
             title: document.querySelector('.cover-info h2')?.textContent?.trim() || "",
             views: document.querySelector('.book-stats:nth-of-type(1) span')?.textContent?.trim() || "",
             stars: document.querySelector('.book-stats:nth-of-type(2) span')?.textContent?.trim() || "",
@@ -125,52 +134,53 @@ const getTruyenDetail = async (url: string): Promise<any> => {
                     link: a.getAttribute('href') || ""
                 }))
         }));
-
-        return storyInfo;
-    } catch (error) {
-        console.error(`❌ Lỗi khi lấy chi tiết truyện ${url}: ${error.message}`);
+    } catch (error: any) {
+        console.error(`❌ Lỗi chi tiết truyện ${url}: ${error.message}`);
         return null;
     } finally {
-        await browser.close();
+        await page.close();
     }
 };
 
-const getChapterContent = async (url: string): Promise<any> => {
-    const browser = await puppeteer.launch({ headless: true });
+const getChapterContent = async (browser, url: string): Promise<any> => {
     const page = await browser.newPage();
-
+    const ua = randomUseragent.getRandom();
+    await page.setUserAgent(ua); 
+    console.log(`📖 Lấy nội dung chương: ${url}`);
     try {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
-        await page.waitForSelector('#bookContent');
+        await page.waitForSelector('#bookContent', { timeout: 60000 });
 
-        const content = await page.evaluate(() => ({
-            title_chapter: document.querySelector('p.book-title:nth-of-type(2)')?.textContent?.trim() || "",
-            content: document.querySelector('#bookContentBody')?.textContent?.trim() || ""
-        }));
-
-        return content;
-    } catch (error) {
-        console.error(`❌ Lỗi khi lấy nội dung chương ${url}: ${error.message}`);
+        return await page.evaluate(() => {
+            const paragraphs = document.querySelectorAll('#bookContentBody p');
+            return {
+                title_chapter: document.querySelector('p.book-title:nth-of-type(2)')?.textContent?.trim() || "",
+                content: Array.from(paragraphs).map(p => p.textContent?.trim() || "").join('\n')
+            };
+        });
+    } catch (error: any) {
+        console.error(`❌ Lỗi nội dung chương ${url}: ${error.message}`);
         return null;
     } finally {
-        await browser.close();
+        await page.close();
     }
 };
 
-const saveEveryChapter = async (chapters: any[], results: any[]): Promise<any[]> => {
+const getChaptersFromList = async (browser, chapters: any[], results: any[]): Promise<any[]> => {
     for (const [index, chapter] of chapters.entries()) {
         try {
-            console.log(`📖 Đang xử lý chương ${index + 1} - ${chapter.title}`);
-            const content = await getChapterContent(`${BASE_URL}${chapter.link}`);
+            console.log(`📘 Chương ${index + 1}: ${chapter.title}`);
+            const content = await getChapterContent(browser, `${BASE_URL}${chapter.link}`);
             if (content) results.push(content);
-        } catch (error) {
-            console.error(`❌ Lỗi khi lưu chương ${chapter.title}: ${error.message}`);
+        } catch (error: any) {
+            console.error(`❌ Lỗi chương ${chapter.title}: ${error.message}`);
         }
+        await sleep(1000);
     }
     return results;
 };
 
-// Run the scraper
-scrapeTruyenList().catch(error => {
+// 🟢 Khởi chạy
+scrapeTruyen().catch(error => {
     console.error("❌ Lỗi không xử lý được:", error);
 });
